@@ -1,10 +1,32 @@
 import os
 import requests
 import json
+from datetime import datetime, time as dtime
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 HISTORY_FILE = "history.json"
+
+
+def parse_heure(h):
+    """Convertit une heure quel que soit son format ('6:5', '06:05:00'...) en objet time."""
+    if not h:
+        return None
+    h = h.strip()
+    parts = h.split(":")
+    try:
+        hh = int(parts[0])
+        mm = int(parts[1]) if len(parts) > 1 else 0
+        return dtime(hour=hh, minute=mm)
+    except (ValueError, IndexError):
+        return None
+
+
+def parse_date(d):
+    """Ne garde que la partie AAAA-MM-JJ, même si le champ contient un horodatage complet."""
+    if not d:
+        return None
+    return d[:10]
 
 def send_telegram(text):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
@@ -38,8 +60,8 @@ def main():
         origine = t["origine"]
         dest = t["destination"]
         date = t["date"]
-        h_min = t.get("heure_min", "00:00")
-        h_max = t.get("heure_max", "23:59")
+        h_min_t = parse_heure(t.get("heure_min", "00:00")) or dtime(0, 0)
+        h_max_t = parse_heure(t.get("heure_max", "23:59")) or dtime(23, 59)
 
         print(f"Recherche directe pour : {origine} ➔ {dest} le {date}...")
 
@@ -72,25 +94,32 @@ def main():
             print(f"📊 Résultats : {len(trains)} trains trouvés.")
 
             for record in trains:
-                if record.get("date") != date:
+                record_date = parse_date(record.get("date"))
+                if record_date != date:
                     continue
 
-                heure_dep = record.get("heure_depart", "00:00")
-                # Champ officiel du dataset : "OUI" si des places Max Jeune/Senior sont dispo
                 is_free = record.get("od_happy_card") == "OUI"
-
                 if not is_free:
                     continue
 
-                if h_min <= heure_dep <= h_max:
-                    train_id = f"test_{date}_{origine}_{dest}_{heure_dep}"
-                    
-                    if train_id not in history:
-                        train_no = record.get("train_no", "?")
-                        msg = f"🚆 TRAIN MAX DISPONIBLE\n📍 {origine} ➔ {dest}\n📅 {date}\n⏰ Départ : {heure_dep}\n🚄 Train n°{train_no}"
-                        send_telegram(msg)
-                        history.append(train_id)
-                        nouveaux_trouves = True
+                heure_dep_t = parse_heure(record.get("heure_depart"))
+                if heure_dep_t is None:
+                    print(f"⚠️ Heure de départ illisible, train ignoré : {record.get('heure_depart')!r} — {record}")
+                    continue
+
+                if not (h_min_t <= heure_dep_t <= h_max_t):
+                    print(f"ℹ️ Train Max dispo mais hors fenêtre horaire ({h_min_t}-{h_max_t}) : départ {heure_dep_t}")
+                    continue
+
+                heure_dep = heure_dep_t.strftime("%H:%M")
+                train_id = f"test_{date}_{origine}_{dest}_{heure_dep}"
+
+                if train_id not in history:
+                    train_no = record.get("train_no", "?")
+                    msg = f"🚆 TRAIN MAX DISPONIBLE\n📍 {origine} ➔ {dest}\n📅 {date}\n⏰ Départ : {heure_dep}\n🚄 Train n°{train_no}"
+                    send_telegram(msg)
+                    history.append(train_id)
+                    nouveaux_trouves = True
                         
         except Exception as e:
             print(f"❌ Erreur lors de la requête : {e}")
