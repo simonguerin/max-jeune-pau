@@ -1,0 +1,16 @@
+[
+  {
+    "origine": "PARIS (INTRAMUROS)",
+    "destination": "PAU",
+    "date": "2026-10-09",
+    "heure_min": "08:00",
+    "heure_max": "18:00"
+  },
+  {
+    "origine": "PAU",
+    "destination": "PARIS (INTRAMUROS)",
+    "date": "2026-10-11",
+    "heure_min": "12:00",
+    "heure_max": "22:00"
+  }
+]
