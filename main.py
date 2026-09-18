@@ -21,14 +21,19 @@ def save_history(history):
         json.dump(history, f)
 
 def main():
+    print("Lecture du fichier config.json...")
+    if not os.path.exists("config.json"):
+        print("❌ ERREUR : Le fichier config.json est introuvable sur le dépôt !")
+        return
+
     with open("config.json", "r") as f:
         trajets = json.load(f)
         
+    print(f"✅ {len(trajets)} trajet(s) chargé(s) avec succès.")
+    
     history = load_history()
     url = "https://data.sncf.com/api/explore/v2.1/catalog/datasets/tarifs-tgv-max/records"
     nouveaux_trouves = False
-
-    print("Recherche de TOUS les trains en cours...")
 
     for t in trajets:
         origine = t["origine"]
@@ -37,26 +42,30 @@ def main():
         h_min = t.get("heure_min", "00:00")
         h_max = t.get("heure_max", "23:59")
 
+        print(f"Interrogation API pour : {origine} ➔ {dest} le {date}...")
+
         params = {
             "where": f"origine='{origine}' and destination='{dest}' and date='{date}'",
             "limit": 100
         }
         
         resp = requests.get(url, params=params)
-        if resp.status_code != 200: continue
+        print(f"Code HTTP reçu de l'API : {resp.status_code}")
+        
+        if resp.status_code != 200:
+            print(f"❌ Erreur API : {resp.text}")
+            continue
         
         data = resp.json()
         nb_trains = data.get("total_count", 0)
-        print(f"Résultats pour {origine} ➔ {dest} : {nb_trains} trains analysés.")
+        print(f"📊 Résultats : {nb_trains} trains trouvés pour cette recherche.")
         
         if nb_trains > 0:
             for record in data["results"]:
                 heure_dep = record.get("heure_depart", "00:00")
-                # On récupère le statut Max Jeune (OUI ou NON)
                 statut_max = record.get("od_happy_card", "NON") 
                 
                 if h_min <= heure_dep <= h_max:
-                    # J'ai rajouté "test_" pour ne pas polluer ton vrai historique
                     train_id = f"test_{date}_{origine}_{dest}_{heure_dep}"
                     
                     if train_id not in history:
@@ -67,6 +76,8 @@ def main():
 
     if nouveaux_trouves:
         save_history(history)
+        
+    print("Fin du script.")
 
 if __name__ == "__main__":
     main()
