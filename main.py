@@ -53,6 +53,7 @@ def main():
         }
 
         try:
+            print(where)
             resp = requests.get(url, params=params, timeout=10)
             print(f"Code HTTP reçu : {resp.status_code}")
 
