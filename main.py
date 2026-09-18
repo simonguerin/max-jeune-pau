@@ -23,7 +23,7 @@ def save_history(history):
 def main():
     print("Lecture du fichier config.json...")
     if not os.path.exists("config.json"):
-        print("❌ ERREUR : Le fichier config.json est introuvable sur le dépôt !")
+        print("❌ ERREUR : Le fichier config.json est introuvable !")
         return
 
     with open("config.json", "r") as f:
@@ -32,7 +32,6 @@ def main():
     print(f"✅ {len(trajets)} trajet(s) chargé(s) avec succès.")
     
     history = load_history()
-    url = "https://data.sncf.com/api/explore/v2.1/catalog/datasets/tarifs-tgv-max/records"
     nouveaux_trouves = False
 
     for t in trajets:
@@ -42,23 +41,26 @@ def main():
         h_min = t.get("heure_min", "00:00")
         h_max = t.get("heure_max", "23:59")
 
-        print(f"Interrogation API pour : {origine} ➔ {dest} le {date}...")
+        print(f"Recherche pour : {origine} ➔ {dest} le {date}...")
 
+        # URL de l'API Max Jeune officielle
+        url = f"https://data.sncf.com/api/explore/v2.1/catalog/datasets/TGVMAX/records"
+        
         params = {
             "where": f"origine='{origine}' and destination='{dest}' and date='{date}'",
             "limit": 100
         }
         
         resp = requests.get(url, params=params)
-        print(f"Code HTTP reçu de l'API : {resp.status_code}")
+        print(f"Code HTTP reçu : {resp.status_code}")
         
         if resp.status_code != 200:
-            print(f"❌ Erreur API : {resp.text}")
+            print(f"⚠️ Erreur API (Code {resp.status_code}), essai d'un autre endpoint...")
             continue
         
         data = resp.json()
         nb_trains = data.get("total_count", 0)
-        print(f"📊 Résultats : {nb_trains} trains trouvés pour cette recherche.")
+        print(f"📊 Résultats : {nb_trains} trains trouvés.")
         
         if nb_trains > 0:
             for record in data["results"]:
