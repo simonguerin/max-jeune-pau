@@ -29,8 +29,16 @@ def parse_date(d):
     return d[:10]
 
 def send_telegram(text):
+    if not TOKEN or not CHAT_ID:
+        print("❌ TELEGRAM_TOKEN ou CHAT_ID manquant (variable d'environnement vide) — notification non envoyée.")
+        return False
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    requests.post(url, data={"chat_id": CHAT_ID, "text": text})
+    resp = requests.post(url, data={"chat_id": CHAT_ID, "text": text})
+    if resp.status_code != 200:
+        print(f"❌ Échec envoi Telegram (HTTP {resp.status_code}) : {resp.text}")
+        return False
+    print("✅ Notification Telegram envoyée avec succès.")
+    return True
 
 def load_history():
     if os.path.exists(HISTORY_FILE):
@@ -119,10 +127,14 @@ def main():
                 heure_dep = heure_dep_t.strftime("%H:%M")
                 train_id = f"test_{date}_{origine}_{dest}_{heure_dep}"
 
-                if train_id not in history:
-                    train_no = record.get("train_no", "?")
-                    msg = f"🚆 TRAIN MAX DISPONIBLE\n📍 {origine} ➔ {dest}\n📅 {date}\n⏰ Départ : {heure_dep}\n🚄 Train n°{train_no}"
-                    send_telegram(msg)
+                if train_id in history:
+                    print(f"🔁 Train Max déjà notifié précédemment (dans history.json) : {train_id}")
+                    continue
+
+                print(f"🎯 Nouveau train Max trouvé : départ {heure_dep}, train n°{record.get('train_no', '?')}")
+                train_no = record.get("train_no", "?")
+                msg = f"🚆 TRAIN MAX DISPONIBLE\n📍 {origine} ➔ {dest}\n📅 {date}\n⏰ Départ : {heure_dep}\n🚄 Train n°{train_no}"
+                if send_telegram(msg):
                     history.append(train_id)
                     nouveaux_trouves = True
                         
