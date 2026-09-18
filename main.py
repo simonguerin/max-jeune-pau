@@ -109,6 +109,7 @@ def main():
                 if record_date != date:
                     continue
                 trains_ce_jour += 1
+                print(f"📋 Train du jour ({trains_ce_jour}) : {json.dumps(record, ensure_ascii=False)}")
 
                 is_free = record.get("od_happy_card") == "OUI"
                 if not is_free:
