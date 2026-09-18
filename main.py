@@ -92,14 +92,19 @@ def main():
                 offset += limit
 
             print(f"📊 Résultats : {len(trains)} trains trouvés.")
+            if trains:
+                print(f"🔍 DEBUG premier train brut : {json.dumps(trains[0], ensure_ascii=False)}")
 
+            trains_ce_jour = 0
             for record in trains:
                 record_date = parse_date(record.get("date"))
                 if record_date != date:
                     continue
+                trains_ce_jour += 1
 
                 is_free = record.get("od_happy_card") == "OUI"
                 if not is_free:
+                    print(f"ℹ️ Train le {record_date} : od_happy_card={record.get('od_happy_card')!r} (pas Max)")
                     continue
 
                 heure_dep_t = parse_heure(record.get("heure_depart"))
@@ -123,6 +128,8 @@ def main():
                         
         except Exception as e:
             print(f"❌ Erreur lors de la requête : {e}")
+        else:
+            print(f"📅 Dont {trains_ce_jour} train(s) correspondant à la date {date}.")
 
     if nouveaux_trouves:
         save_history(history)
