@@ -43,38 +43,41 @@ def main():
 
         print(f"Recherche directe pour : {origine} ➔ {dest} le {date}...")
 
-        # Utilisation de l'endpoint direct de l'API Max Jeune
-        url = "https://sncf-connect-api-wrapper.vercel.app/api/availability"
-        
+        # API open data officielle SNCF (dataset "tgvmax", Opendatasoft, sans clé requise)
+        url = "https://ressources.data.sncf.com/api/explore/v2.1/catalog/datasets/tgvmax/records"
+
+        where = f'date="{date}" and origine="{origine}" and destination="{dest}"'
         params = {
-            "origin": origine,
-            "destination": dest,
-            "date": date
+            "where": where,
+            "limit": 100,
         }
-        
+
         try:
             resp = requests.get(url, params=params, timeout=10)
             print(f"Code HTTP reçu : {resp.status_code}")
-            
+
             if resp.status_code != 200:
                 print(f"❌ Erreur API : {resp.text}")
                 continue
-            
+
             data = resp.json()
-            # Adaptation selon la structure de retour
-            trains = data if isinstance(data, list) else data.get("trains", [])
+            trains = data.get("results", [])
             print(f"📊 Résultats : {len(trains)} trains trouvés.")
-            
+
             for record in trains:
-                heure_dep = record.get("departure_time", record.get("heure_depart", "00:00"))
-                # Vérifie si le prix est à 0 ou si le statut max est oui
-                is_free = record.get("price", 1) == 0 or record.get("od_happy_card") == "OUI"
-                
+                heure_dep = record.get("heure_depart", "00:00")
+                # Champ officiel du dataset : "OUI" si des places Max Jeune/Senior sont dispo
+                is_free = record.get("od_happy_card") == "OUI"
+
+                if not is_free:
+                    continue
+
                 if h_min <= heure_dep <= h_max:
                     train_id = f"test_{date}_{origine}_{dest}_{heure_dep}"
                     
                     if train_id not in history:
-                        msg = f"🚆 TEST TRAIN DIRECT\n📍 {origine} ➔ {dest}\n📅 {date}\n⏰ Départ : {heure_dep}\n🎟️ Gratuit/Max : {is_free}"
+                        train_no = record.get("train_no", "?")
+                        msg = f"🚆 TRAIN MAX DISPONIBLE\n📍 {origine} ➔ {dest}\n📅 {date}\n⏰ Départ : {heure_dep}\n🚄 Train n°{train_no}"
                         send_telegram(msg)
                         history.append(train_id)
                         nouveaux_trouves = True
