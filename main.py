@@ -46,7 +46,7 @@ def main():
         # API open data officielle SNCF (dataset "tgvmax", Opendatasoft, sans clé requise)
         url = "https://ressources.data.sncf.com/api/explore/v2.1/catalog/datasets/tgvmax/records"
 
-        where = f'date="{date}" and origine="{origine}" and destination="{dest}"'
+        where = f'date={date} and origine="{origine}" and destination="{dest}"'
         params = {
             "where": where,
             "limit": 100,
