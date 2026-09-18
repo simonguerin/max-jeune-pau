@@ -112,7 +112,7 @@ def main():
 
                 is_free = record.get("od_happy_card") == "OUI"
                 if not is_free:
-                    print(f"ℹ️ Train le {record_date} : od_happy_card={record.get('od_happy_card')!r} (pas Max)")
+                    print(f"ℹ️ Train {record.get('train_no', '?')} le {record_date} à {record.get('heure_depart', '?')} : od_happy_card={record.get('od_happy_card')!r} (pas Max)")
                     continue
 
                 heure_dep_t = parse_heure(record.get("heure_depart"))
