@@ -21,7 +21,6 @@ def save_history(history):
         json.dump(history, f)
 
 def main():
-    # Charger les paramètres depuis config.json
     with open("config.json", "r") as f:
         trajets = json.load(f)
         
@@ -29,9 +28,7 @@ def main():
     url = "https://data.sncf.com/api/explore/v2.1/catalog/datasets/tarifs-tgv-max/records"
     nouveaux_trouves = False
 
-    # Message de test
-    send_telegram("🔔 Connexion Telegram OK ! Début de la recherche...")
-    print("Test Telegram envoyé.")
+    print("Recherche de TOUS les trains en cours...")
 
     for t in trajets:
         origine = t["origine"]
@@ -49,26 +46,24 @@ def main():
         if resp.status_code != 200: continue
         
         data = resp.json()
+        nb_trains = data.get("total_count", 0)
+        print(f"Résultats pour {origine} ➔ {dest} : {nb_trains} trains analysés.")
         
-        # Log de vérification (correctement aligné)
-        print(f"Résultats pour {origine} ➔ {dest} : {data.get('total_count', 0)} trains analysés.")
-        
-        if data.get("total_count", 0) > 0:
+        if nb_trains > 0:
             for record in data["results"]:
-                # Vérifier si la place est à 0€
-                if record.get("od_happy_card") == "OUI":
-                    heure_dep = record.get("heure_depart", "00:00")
+                heure_dep = record.get("heure_depart", "00:00")
+                # On récupère le statut Max Jeune (OUI ou NON)
+                statut_max = record.get("od_happy_card", "NON") 
+                
+                if h_min <= heure_dep <= h_max:
+                    # J'ai rajouté "test_" pour ne pas polluer ton vrai historique
+                    train_id = f"test_{date}_{origine}_{dest}_{heure_dep}"
                     
-                    # Vérifier la tranche horaire
-                    if h_min <= heure_dep <= h_max:
-                        train_id = f"{date}_{origine}_{dest}_{heure_dep}"
-                        
-                        # Si on ne l'a pas déjà notifié
-                        if train_id not in history:
-                            msg = f"🚄 MAX JEUNE DISPO !\n📍 {origine} ➔ {dest}\n📅 {date}\n⏰ Départ : {heure_dep}"
-                            send_telegram(msg)
-                            history.append(train_id)
-                            nouveaux_trouves = True
+                    if train_id not in history:
+                        msg = f"🚆 TEST TRAIN\n📍 {origine} ➔ {dest}\n📅 {date}\n⏰ Départ : {heure_dep}\n🎟️ Max Jeune dispo : {statut_max}"
+                        send_telegram(msg)
+                        history.append(train_id)
+                        nouveaux_trouves = True
 
     if nouveaux_trouves:
         save_history(history)
