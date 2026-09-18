@@ -46,26 +46,35 @@ def main():
         # API open data officielle SNCF (dataset "tgvmax", Opendatasoft, sans clé requise)
         url = "https://ressources.data.sncf.com/api/explore/v2.1/catalog/datasets/tgvmax/records"
 
-        where = f'date={date} and origine="{origine}" and destination="{dest}"'
-        params = {
-            "where": where,
-            "limit": 100,
-        }
+        where = f'origine="{origine}" and destination="{dest}"'
+        limit = 100
+        offset = 0
+        trains = []
 
         try:
-            print(where)
-            resp = requests.get(url, params=params, timeout=10)
-            print(f"Code HTTP reçu : {resp.status_code}")
+            while True:
+                params = {"where": where, "limit": limit, "offset": offset}
+                resp = requests.get(url, params=params, timeout=10)
+                print(f"Code HTTP reçu : {resp.status_code}")
 
-            if resp.status_code != 200:
-                print(f"❌ Erreur API : {resp.text}")
-                continue
+                if resp.status_code != 200:
+                    print(f"❌ Erreur API : {resp.text}")
+                    break
 
-            data = resp.json()
-            trains = data.get("results", [])
+                data = resp.json()
+                page = data.get("results", [])
+                trains.extend(page)
+
+                if len(page) < limit or offset > 1000:
+                    break
+                offset += limit
+
             print(f"📊 Résultats : {len(trains)} trains trouvés.")
 
             for record in trains:
+                if record.get("date") != date:
+                    continue
+
                 heure_dep = record.get("heure_depart", "00:00")
                 # Champ officiel du dataset : "OUI" si des places Max Jeune/Senior sont dispo
                 is_free = record.get("od_happy_card") == "OUI"
