@@ -41,40 +41,46 @@ def main():
         h_min = t.get("heure_min", "00:00")
         h_max = t.get("heure_max", "23:59")
 
-        print(f"Recherche pour : {origine} ➔ {dest} le {date}...")
+        print(f"Recherche directe pour : {origine} ➔ {dest} le {date}...")
 
-        # URL de l'API Max Jeune officielle
-        url = f"https://data.sncf.com/api/explore/v2.1/catalog/datasets/TGVMAX/records"
+        # Utilisation de l'endpoint direct de l'API Max Jeune
+        url = "https://sncf-connect-api-wrapper.vercel.app/api/availability"
         
         params = {
-            "where": f"origine='{origine}' and destination='{dest}' and date='{date}'",
-            "limit": 100
+            "origin": origine,
+            "destination": dest,
+            "date": date
         }
         
-        resp = requests.get(url, params=params)
-        print(f"Code HTTP reçu : {resp.status_code}")
-        
-        if resp.status_code != 200:
-            print(f"⚠️ Erreur API (Code {resp.status_code}), essai d'un autre endpoint...")
-            continue
-        
-        data = resp.json()
-        nb_trains = data.get("total_count", 0)
-        print(f"📊 Résultats : {nb_trains} trains trouvés.")
-        
-        if nb_trains > 0:
-            for record in data["results"]:
-                heure_dep = record.get("heure_depart", "00:00")
-                statut_max = record.get("od_happy_card", "NON") 
+        try:
+            resp = requests.get(url, params=params, timeout=10)
+            print(f"Code HTTP reçu : {resp.status_code}")
+            
+            if resp.status_code != 200:
+                print(f"❌ Erreur API : {resp.text}")
+                continue
+            
+            data = resp.json()
+            # Adaptation selon la structure de retour
+            trains = data if isinstance(data, list) else data.get("trains", [])
+            print(f"📊 Résultats : {len(trains)} trains trouvés.")
+            
+            for record in trains:
+                heure_dep = record.get("departure_time", record.get("heure_depart", "00:00"))
+                # Vérifie si le prix est à 0 ou si le statut max est oui
+                is_free = record.get("price", 1) == 0 or record.get("od_happy_card") == "OUI"
                 
                 if h_min <= heure_dep <= h_max:
                     train_id = f"test_{date}_{origine}_{dest}_{heure_dep}"
                     
                     if train_id not in history:
-                        msg = f"🚆 TEST TRAIN\n📍 {origine} ➔ {dest}\n📅 {date}\n⏰ Départ : {heure_dep}\n🎟️ Max Jeune dispo : {statut_max}"
+                        msg = f"🚆 TEST TRAIN DIRECT\n📍 {origine} ➔ {dest}\n📅 {date}\n⏰ Départ : {heure_dep}\n🎟️ Gratuit/Max : {is_free}"
                         send_telegram(msg)
                         history.append(train_id)
                         nouveaux_trouves = True
+                        
+        except Exception as e:
+            print(f"❌ Erreur lors de la requête : {e}")
 
     if nouveaux_trouves:
         save_history(history)
