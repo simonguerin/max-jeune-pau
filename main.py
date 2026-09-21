@@ -15,6 +15,9 @@ HISTORY_FILE = "history.json"
 STATION_ALIASES = {
     "paris": "PARIS (intramuros)",
     "pau": "PAU",
+    "lyon": "LYON (intramuros)",
+    "limoges": "LIMOGES BENEDICTINS",
+    "la rochelle": "LA ROCHELLE VILLE",
 }
 
 
