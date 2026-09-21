@@ -1,11 +1,32 @@
 import os
 import requests
 import json
-from datetime import datetime, time as dtime
+import csv
+import io
+from datetime import time as dtime, date as ddate
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
+SHEET_CSV_URL = os.getenv("GOOGLE_SHEET_CSV_URL")
 HISTORY_FILE = "history.json"
+
+# Correspondances "nom tapé sur le téléphone" -> "nom exact attendu par le dataset SNCF".
+# Complète cette liste au fur et à mesure des villes que tu utilises.
+STATION_ALIASES = {
+    "paris": "PARIS (intramuros)",
+    "pau": "PAU",
+}
+
+
+def resolve_station(nom):
+    """Normalise un nom de gare tapé librement vers le nom exact attendu par l'API."""
+    if not nom:
+        return nom
+    cle = nom.strip().lower()
+    if cle in STATION_ALIASES:
+        return STATION_ALIASES[cle]
+    # Nom inconnu de la table : on tente une majuscule simple, sans garantie.
+    return nom.strip().upper()
 
 
 def parse_heure(h):
@@ -26,7 +47,8 @@ def parse_date(d):
     """Ne garde que la partie AAAA-MM-JJ, même si le champ contient un horodatage complet."""
     if not d:
         return None
-    return d[:10]
+    return d.strip()[:10]
+
 
 def send_telegram(text):
     if not TOKEN or not CHAT_ID:
@@ -40,27 +62,68 @@ def send_telegram(text):
     print("✅ Notification Telegram envoyée avec succès.")
     return True
 
+
 def load_history():
     if os.path.exists(HISTORY_FILE):
         with open(HISTORY_FILE, "r") as f:
             return json.load(f)
     return []
 
+
 def save_history(history):
     with open(HISTORY_FILE, "w") as f:
         json.dump(history, f)
 
+
+def load_trajets():
+    """Récupère les trajets depuis le Google Sheet (colonnes : origine, destination, date, heure_min, heure_max)."""
+    if not SHEET_CSV_URL:
+        print("❌ ERREUR : la variable GOOGLE_SHEET_CSV_URL n'est pas définie.")
+        return []
+
+    resp = requests.get(SHEET_CSV_URL, timeout=10)
+    if resp.status_code != 200:
+        print(f"❌ Impossible de lire le Google Sheet (HTTP {resp.status_code}).")
+        return []
+
+    reader = csv.DictReader(io.StringIO(resp.text))
+    trajets = []
+    today = ddate.today().isoformat()
+
+    for row in reader:
+        origine_brut = row.get("origine", "")
+        dest_brut = row.get("destination", "")
+        date_brut = parse_date(row.get("date", ""))
+
+        if not origine_brut or not dest_brut or not date_brut:
+            continue
+
+        # Trajet dans le passé : on l'ignore, plus la peine de le vérifier.
+        if date_brut < today:
+            print(f"🗑️ Trajet du {date_brut} ignoré (date déjà passée).")
+            continue
+
+        trajets.append({
+            "origine": resolve_station(origine_brut),
+            "destination": resolve_station(dest_brut),
+            "date": date_brut,
+            "heure_min": row.get("heure_min", "00:00"),
+            "heure_max": row.get("heure_max", "23:59"),
+        })
+
+    return trajets
+
+
 def main():
-    print("Lecture du fichier config.json...")
-    if not os.path.exists("config.json"):
-        print("❌ ERREUR : Le fichier config.json est introuvable !")
+    print("Lecture des trajets depuis le Google Sheet...")
+    trajets = load_trajets()
+
+    if not trajets:
+        print("❌ Aucun trajet valide à traiter.")
         return
 
-    with open("config.json", "r") as f:
-        trajets = json.load(f)
-        
-    print(f"✅ {len(trajets)} trajet(s) chargé(s) avec succès.")
-    
+    print(f"✅ {len(trajets)} trajet(s) à vérifier (dates passées déjà exclues).")
+
     history = load_history()
     nouveaux_trouves = False
 
@@ -80,6 +143,7 @@ def main():
         limit = 100
         offset = 0
         trains = []
+        trains_ce_jour = 0
 
         try:
             while True:
@@ -103,7 +167,6 @@ def main():
             if trains:
                 print(f"🔍 DEBUG premier train brut : {json.dumps(trains[0], ensure_ascii=False)}")
 
-            trains_ce_jour = 0
             for record in trains:
                 record_date = parse_date(record.get("date"))
                 if record_date != date:
@@ -138,7 +201,7 @@ def main():
                 if send_telegram(msg):
                     history.append(train_id)
                     nouveaux_trouves = True
-                        
+
         except Exception as e:
             print(f"❌ Erreur lors de la requête : {e}")
         else:
@@ -146,8 +209,9 @@ def main():
 
     if nouveaux_trouves:
         save_history(history)
-        
+
     print("Fin du script.")
+
 
 if __name__ == "__main__":
     main()
